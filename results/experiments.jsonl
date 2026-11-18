@@ -1,0 +1,1 @@
+{"exp": "lgbm_mid_nobm", "window": "dev", "mae": {"SP+1": 17.25, "SP+2": 19.793, "SP+3": 21.607}, "rmse": {"SP+1": 25.02, "SP+2": 27.743, "SP+3": 29.714}, "config": {"anchor": "mid_l0", "objective": "l1", "drop": ["bm0_", "bm1_", "bm2_", "bm_have"], "keep": null, "params": {}, "rounds": 1500, "train_from": "2024-01-15", "weight_recent": 0.0}}

@@ -4,6 +4,8 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "bmdash",
+    "holidays>=0.109",
+    "lightgbm>=4.7.0",
     "pandas>=3.1.1",
 ]
 
