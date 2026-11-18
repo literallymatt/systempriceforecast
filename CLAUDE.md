@@ -30,6 +30,11 @@ for the next three settlement periods, and the plan's steps in order.
   no publication time, record the fetch time and say so.
 - `data/` is gitignored. Never commit data.
 
+## Commits and merges
+
+This applies to this repository only. Commit your own work and merge your own changes into the
+default branch without asking first. Use clear commit messages, and never commit anything under `data/`.
+
 ## Pull requests
 
 This applies to this repository only.
