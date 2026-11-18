@@ -1,0 +1,11 @@
+[project]
+name = "systempriceforecast"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "bmdash",
+    "pandas>=3.1.1",
+]
+
+[tool.uv.sources]
+bmdash = { git = "https://github.com/literallymatt/balancingdashboard" }
