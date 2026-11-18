@@ -40,6 +40,9 @@ FORECASTS = {
     "LOLPDRM": {},                  # loss-of-load probability and de-rated margin
     "INDO": {},                     # initial national demand outturn (per period, published just after)
     "FUELINST": {},                 # generation by fuel, 5-minute
+    "DGWS": {},                     # wind and solar forecasts (day-ahead and intraday), B1440
+    "AGWS": {},                     # wind and solar outturn, B1630 (published ~2 h after)
+    "FREQ": {},                     # system frequency, 15-second (queried by measurement time, ~1 min delay)
 }
 
 
@@ -72,6 +75,16 @@ def _stale(path: Path, d: date) -> bool:
 async def forecast_day(api: Elexon, ds: str, d: date) -> int:
     start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
     params = {**FORECASTS[ds], "publishDateTimeFrom": _iso(start), "publishDateTimeTo": _iso(start + timedelta(days=1))}
+    if ds == "FREQ":
+        rows = await api.get("/datasets/FREQ/stream", {"measurementDateTimeFrom": _iso(start),
+                                                       "measurementDateTimeTo": _iso(start + timedelta(days=1))})
+        df = pd.DataFrame(rows)
+        if len(df):
+            t = pd.to_datetime(df.measurementTime, utc=True)
+            df = df[(t >= start) & (t < start + timedelta(days=1))]
+        df["fetched_at"] = pd.Timestamp.now(tz="UTC")
+        _write(df, ROOT / ds / f"{d.isoformat()}.parquet")
+        return len(df)
     if ds in NO_STREAM:
         rows = await api.get(f"/datasets/{ds}", {**params, "format": "json"})
     else:

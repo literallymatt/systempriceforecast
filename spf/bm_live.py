@@ -34,7 +34,7 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 ISSUE_MIN = 25
-BOALF_LAG = 5  # minutes from acceptance to it being usable (measured live: see spf.watch_publication)
+BOALF_LAG = 3  # minutes from acceptance to it being usable (measured max 1.7 min over 362 acceptances)
 ACC = Path(os.environ["BMDASH_DATA"]) / "acceptances"
 EL = Path("data/elexon")
 OUT = Path("data/features/bm_live")

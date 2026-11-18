@@ -34,7 +34,9 @@ warnings.simplefilter("ignore", pd.errors.PerformanceWarning)
 ISSUE_MIN = bm_live.ISSUE_MIN  # 25
 PRICE_LAG = 21   # minutes after period end; measured max 19.5 (createdDateTime) + API delay
 MID_LAG = 20     # minutes after period start; measured (see data-availability.md)
-MARGIN = 3       # minutes between a stated publishTime and the data being fetchable
+MARGIN = 8       # minutes between a stated publishTime and the data being fetchable (IMBALNGC measured ~5.5)
+FUEL_MARGIN = 2  # FUELINST is fetchable within a minute of its publishTime
+FREQ_LAG = 2     # minutes from a frequency measurement to it being usable (observed ~40 s)
 HH = pd.Timedelta(minutes=30)
 EL = Path("data/elexon")
 OUT = Path("data/features/frame.parquet")
@@ -52,14 +54,14 @@ def _read(ds: str, cols: list[str] | None = None) -> pd.DataFrame:
 
 
 def _asof(base: pd.DataFrame, versions: pd.DataFrame, target_col: str, value_cols: list[str],
-          prefix: str, max_lead: pd.Timedelta | None = None) -> pd.DataFrame:
+          prefix: str, max_lead: pd.Timedelta | None = None, margin: int = MARGIN) -> pd.DataFrame:
     """For each row of base (tau, target_col), the latest version with publishTime <= tau - MARGIN."""
     v = versions.rename(columns={"startTime": target_col})
     if max_lead is not None:
         v = v[(v[target_col] - v.publishTime) <= max_lead]
     v = v.sort_values("publishTime")
     left = base[["tau", target_col]].copy()
-    left["_avail"] = left.tau - pd.Timedelta(minutes=MARGIN)
+    left["_avail"] = left.tau - pd.Timedelta(minutes=margin)
     left = left.reset_index().sort_values("_avail")
     m = pd.merge_asof(left, v[["publishTime", target_col, *value_cols]], left_on="_avail",
                       right_on="publishTime", by=target_col, direction="backward")
@@ -176,7 +178,7 @@ def build(start: str = "2024-01-01") -> pd.DataFrame:
     wide = fuel.pivot_table(index="publishTime", columns="fuel", values="generation", aggfunc="sum").sort_index()
     wide = wide[["CCGT", "OCGT", "WIND", "NUCLEAR", "PS", "BIOMASS", "INT", "NPSHYD"]].add_prefix("fi_")
     wide.index = wide.index.as_unit("ns")
-    left = pd.DataFrame({"_avail": f.tau - pd.Timedelta(minutes=MARGIN)}).reset_index().sort_values("_avail")
+    left = pd.DataFrame({"_avail": f.tau - pd.Timedelta(minutes=FUEL_MARGIN)}).reset_index().sort_values("_avail")
     now = pd.merge_asof(left, wide.reset_index(), left_on="_avail", right_on="publishTime").set_index("sp0").sort_index()
     left30 = left.assign(_avail=left._avail - pd.Timedelta(minutes=30))
     ago = pd.merge_asof(left30, wide.reset_index(), left_on="_avail", right_on="publishTime").set_index("sp0").sort_index()
@@ -186,6 +188,41 @@ def build(start: str = "2024-01-01") -> pd.DataFrame:
     f["fi_age"] = (f.tau - now.publishTime).dt.total_seconds() / 60
     f["wind_err_now"] = f.fi_WIND - f.windfor_h0
     f["gas_total"] = f.fi_CCGT + f.fi_OCGT
+
+    # ---- wind and solar (B1440 forecasts as published; B1630 outturn, published ~2.5 h after period start)
+    dg = _read("DGWS", ["publishTime", "startTime", "psrType", "quantity"])
+    dg["kind"] = np.where(dg.psrType == "Solar", "solar", "wind")
+    dgw = dg.pivot_table(index=["publishTime", "startTime"], columns="kind", values="quantity",
+                         aggfunc="sum").reset_index()
+    for h in (0, 1, 2, 3):
+        base = pd.DataFrame({"tau": f.tau, "target": f.index + h * HH})
+        a = _asof(base, dgw, "target", ["solar", "wind"], "x_", pd.Timedelta(hours=48))
+        f[f"solar_fc_h{h}"] = a["x_solar"]
+        f[f"wind_fc_dgws_h{h}"] = a["x_wind"]
+    ag = _read("AGWS", ["publishTime", "startTime", "psrType", "quantity"])
+    ag = ag[ag.psrType == "Solar"].drop_duplicates("startTime", keep="last").sort_values("publishTime")
+    left = pd.DataFrame({"_avail": f.tau - pd.Timedelta(minutes=MARGIN)}).reset_index().sort_values("_avail")
+    m = pd.merge_asof(left, ag[["publishTime", "startTime", "quantity"]], left_on="_avail",
+                      right_on="publishTime").set_index("sp0").sort_index()
+    base = pd.DataFrame({"tau": m.startTime - pd.Timedelta(minutes=60 - MARGIN), "target": m.startTime}).dropna()
+    a = _asof(base, dgw, "target", ["solar"], "x_", pd.Timedelta(hours=48))
+    f["solar_act_last"] = m.quantity
+    f["solar_err_last"] = m.quantity - a["x_solar"].reindex(f.index)
+    f["solar_err_ratio_last"] = f.solar_err_last / (a["x_solar"].reindex(f.index).abs() + 200)
+
+    # ---- system frequency: measurements are fetchable ~1 min after they are taken; use those >= FREQ_LAG old
+    fr = _read("FREQ", ["measurementTime", "frequency"])
+    fr["measurementTime"] = pd.to_datetime(fr.measurementTime, utc=True).dt.as_unit("ns")
+    fr = fr[fr.frequency.between(49.0, 51.0)]  # drop dropouts recorded as 0 Hz
+    m = (fr.set_index("measurementTime").frequency.sort_index().resample("1min").mean() - 50.0)
+    last_bin = (f.tau - pd.Timedelta(minutes=FREQ_LAG + 1)).to_numpy()  # last complete minute bin
+    for name, win in (("freq_dev_10m", "10min"), ("freq_dev_sp0", f"{ISSUE_MIN - FREQ_LAG}min"),
+                      ("freq_dev_60m", "60min")):
+        f[name] = m.rolling(win, min_periods=1).mean().reindex(last_bin).to_numpy()
+    f["freq_dev_last"] = m.reindex(last_bin).to_numpy()
+    f["freq_min_sp0"] = m.rolling(f"{ISSUE_MIN - FREQ_LAG}min").min().reindex(last_bin).to_numpy()
+    f["freq_max_sp0"] = m.rolling(f"{ISSUE_MIN - FREQ_LAG}min").max().reindex(last_bin).to_numpy()
+    f["freq_dev_spm1"] = m.rolling("30min").mean().reindex((f.index - pd.Timedelta(minutes=1)).to_numpy()).to_numpy()
 
     # ---- live BM state
     bm_files = sorted(Path("data/features/bm_live").glob("*.parquet"))
@@ -207,6 +244,13 @@ def build(start: str = "2024-01-01") -> pd.DataFrame:
         for c in bmcols:
             f[f"bm{k}_{c}"] = b[c]
     f["bm_have"] = f.bm0_net_mwh.notna().astype(int)
+    # price the live state would set: marginal accepted offer if net short, else marginal accepted bid
+    for k in (0, 1):
+        short = f[f"bm{k}_net_mwh"] > 0
+        f[f"bm{k}_est_price"] = np.where(short, f[f"bm{k}_offer_pmax"].fillna(f[f"bm{k}_offer_vwap"]),
+                                         f[f"bm{k}_bid_pmin"].fillna(f[f"bm{k}_bid_vwap"]))
+        f[f"bm{k}_est_minus_mid"] = f[f"bm{k}_est_price"] - f["mid_l0"]
+    f["bm0_net_minus_imbal"] = f.bm0_net_mwh - f.imbal_h0 / 2  # live accepted MWh vs NESO's indicated MW
 
     # ---- calendar (local time)
     loc = (f.index + HH).tz_convert("Europe/London")  # SP+1 local time

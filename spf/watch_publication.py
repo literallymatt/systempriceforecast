@@ -18,6 +18,7 @@ from pathlib import Path
 from bmdash.elexon import Elexon
 
 OUT = Path("data/publication_watch.csv")
+OTHER_PUBLISHED = ["MELNGC", "NDF", "TSDF", "INDO", "LOLPDRM", "WINDFOR"]
 FIELDS = ["dataset", "start_time", "provider", "first_seen", "created", "value", "volume"]
 
 
@@ -50,6 +51,11 @@ async def poll_once(api: Elexon, seen: set[tuple], mid_val: dict[tuple, str]) ->
                                        "publishDateTimeTo": _iso(now + timedelta(minutes=5)), "fuelType": "WIND",
                                        "format": "json"}),
     )
+    pub = {"publishDateTimeFrom": _iso(now - timedelta(hours=1)), "publishDateTimeTo": _iso(now + timedelta(minutes=5)),
+           "format": "json"}
+    others = await asyncio.gather(*(api.get(f"/datasets/{ds}", {**pub, **({"boundary": "N"} if ds in ("MELNGC", "TSDF")
+                                                                          else {})})
+                                    for ds in OTHER_PUBLISHED), return_exceptions=True)
     stamp = now.isoformat(timespec="seconds")
     new = []
 
@@ -76,6 +82,11 @@ async def poll_once(api: Elexon, seen: set[tuple], mid_val: dict[tuple, str]) ->
             r.get("levelFrom"), r.get("levelTo"))
     for r in {x["publishTime"]: x for x in imbal}.values():
         add("imbalngc", r["publishTime"], "", r["publishTime"], "", "")
+    for ds, rows in zip(OTHER_PUBLISHED, others):
+        if isinstance(rows, Exception):
+            continue
+        for t in {x["publishTime"] for x in rows}:
+            add(ds.lower(), t, "", t, "", "")
     for r in fuel:
         add("fuelinst", r["startTime"], "WIND", r["publishTime"], r.get("generation"), "")
     return new

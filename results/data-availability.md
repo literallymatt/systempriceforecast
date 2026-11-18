@@ -1,17 +1,17 @@
 # Data availability: what is known at forecast time
 
-Measured by polling Elexon every 20–30 s (2026-11-18 19:50 – 2026-11-18 20:36 UTC) with `spf.watch_publication`. Resolution is about ±30 s. Items already present when the watcher (re)started are excluded.
+Measured by polling Elexon every 20–30 s (2026-11-18 19:50 – 2026-11-18 21:22 UTC) with `spf.watch_publication`. Resolution is about ±30 s. Items already present when the watcher (re)started are excluded.
 
 | measurement | n | min | median | p95 | max |
 |---|---:|---:|---:|---:|---:|
-| System price: first seen − period end (min) | 1 | 20.4 | 20.4 | 20.4 | 20.4 |
-| System price: first seen − createdDateTime (min) | 1 | 1.7 | 1.7 | 1.7 | 1.7 |
-| MID (APX): first seen − period start (min) | 1 | 12.3 | 12.3 | 12.3 | 12.3 |
-| BOALF: first seen − acceptance time (min) | 85 | 0.3 | 0.9 | 1.5 | 1.5 |
-| IMBALNGC: first seen − publishTime (min) | 0 |  |  |  |  |
-| FUELINST: first seen − publishTime (min) | 3 | 0.5 | 0.5 | 0.6 | 0.6 |
+| System price: first seen − period end (min) | 3 | 19.8 | 19.8 | 20.3 | 20.4 |
+| System price: first seen − createdDateTime (min) | 3 | 1.2 | 1.4 | 1.7 | 1.7 |
+| MID (APX): first seen − period start (min) | 3 | 12.3 | 12.4 | 12.4 | 12.4 |
+| BOALF: first seen − acceptance time (min) | 362 | 0.3 | 0.9 | 1.5 | 1.7 |
+| IMBALNGC: first seen − publishTime (min) | 2 | 5.1 | 5.3 | 5.5 | 5.5 |
+| FUELINST: first seen − publishTime (min) | 12 | 0.3 | 0.5 | 0.8 | 0.8 |
 
-MID values changed after first publication in 0 of 1 watched periods.
+MID values changed after first publication in 0 of 3 watched periods.
 
 ## Rules used by the backtest
 

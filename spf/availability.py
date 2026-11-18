@@ -50,6 +50,10 @@ def main() -> None:
     im = w[(w.dataset == "imbalngc") & w.valid]
     rows.append({"item": "IMBALNGC: first seen − publishTime (min)",
                  **describe((im.first_seen - im.created_t).dt.total_seconds() / 60)})
+    for ds in ["melngc", "ndf", "tsdf", "indo", "lolpdrm", "windfor"]:
+        x = w[(w.dataset == ds) & w.valid]
+        rows.append({"item": f"{ds.upper()}: first seen − publishTime (min)",
+                     **describe((x.first_seen - x.created_t).dt.total_seconds() / 60)})
     fu = w[(w.dataset == "fuelinst") & w.valid]
     rows.append({"item": "FUELINST: first seen − publishTime (min)",
                  **describe((fu.first_seen - fu.created_t).dt.total_seconds() / 60)})

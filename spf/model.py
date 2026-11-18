@@ -37,6 +37,8 @@ class Exp:
     rounds: int = 1500
     train_from: str = "2024-01-15"
     weight_recent: float = 0.0          # >0: exponential weight with this half-life in days
+    seeds: int = 1                      # average this many models with different seeds
+    niv_stack: bool = False             # add out-of-fold NIV regression / P(short) predictions as features
 
 
 EXPS = {
@@ -49,6 +51,14 @@ EXPS = {
     "lgbm_mid_hist": Exp("lgbm_mid_hist", keep=["ssp_", "niv_", "mid", "hour", "dow", "month", "holiday",
                                                 "weekend", "offer_vol", "bid_vol", "pdc", "short_share"]),
     "lgbm_mid_recent": Exp("lgbm_mid_recent", weight_recent=180),
+    "lgbm_recent365": Exp("lgbm_recent365", weight_recent=365),
+    "lgbm_leaves31": Exp("lgbm_leaves31", params={"num_leaves": 31}),
+    "lgbm_leaves127": Exp("lgbm_leaves127", params={"num_leaves": 127, "min_data_in_leaf": 300}),
+    "lgbm_slow": Exp("lgbm_slow", params={"learning_rate": 0.015}, rounds=3000),
+    "lgbm_fast": Exp("lgbm_fast", params={"learning_rate": 0.06}, rounds=700),
+    "lgbm_bag3": Exp("lgbm_bag3", seeds=3),
+    "lgbm_est_anchor": Exp("lgbm_est_anchor", anchor="bm0_est_price"),
+    "lgbm_stack": Exp("lgbm_stack", niv_stack=True),
 }
 
 
@@ -70,6 +80,32 @@ def months(a: str, b: str) -> list[pd.Timestamp]:
     return list(pd.date_range(a, b, freq="MS", tz="UTC", inclusive="left"))
 
 
+NIV_PARAMS = {"learning_rate": 0.06, "num_leaves": 63, "min_data_in_leaf": 100, "feature_fraction": 0.7,
+              "bagging_fraction": 0.8, "bagging_freq": 1, "verbose": -1, "num_threads": 0}
+
+
+def add_niv_stack(train: pd.DataFrame, test: pd.DataFrame, feats: list[str], folds: int = 4):
+    """NIV regression and P(short) per horizon. Training rows get out-of-fold predictions from models fitted on
+    the other contiguous time blocks; test rows get predictions from models fitted on all training rows."""
+    train, test = train.copy(), test.copy()
+    blocks = np.array_split(np.arange(len(train)), folds)
+    for h in HORIZONS:
+        lab = train[f"niv_y{h}"]
+        ok = lab.notna().to_numpy()
+        for name, obj, y in ((f"nivhat{h}", "l2", lab), (f"pshort{h}", "binary", (lab > 0).astype(float))):
+            oof = np.full(len(train), np.nan)
+            for b in blocks:
+                fit = np.ones(len(train), bool)
+                fit[b] = False
+                fit &= ok
+                m = lgb.train({**NIV_PARAMS, "objective": obj}, lgb.Dataset(train[feats][fit], y[fit]), 400)
+                oof[b] = m.predict(train[feats].iloc[b])
+            train[name] = oof
+            m = lgb.train({**NIV_PARAMS, "objective": obj}, lgb.Dataset(train[feats][ok], y[ok]), 400)
+            test[name] = m.predict(test[feats])
+    return train, test
+
+
 def fit_predict(df: pd.DataFrame, exp: Exp, test_months: list[pd.Timestamp]) -> pd.DataFrame:
     feats = features(df, exp)
     out = []
@@ -81,6 +117,9 @@ def fit_predict(df: pd.DataFrame, exp: Exp, test_months: list[pd.Timestamp]) -> 
         if test.empty:
             continue
         pm = {}
+        if exp.niv_stack:
+            train, test = add_niv_stack(train, test, feats)
+        hfeats = feats + ([f"nivhat{h}" for h in HORIZONS] + [f"pshort{h}" for h in HORIZONS] if exp.niv_stack else [])
         for h in HORIZONS:
             y = f"y{h}"
             tr = train[train[y].notna()]
@@ -89,13 +128,17 @@ def fit_predict(df: pd.DataFrame, exp: Exp, test_months: list[pd.Timestamp]) -> 
             w = None
             if exp.weight_recent > 0:
                 age = (m0 - tr.index).total_seconds() / 86400
-                w = 0.5 ** (age / exp.weight_recent)
+                w = np.asarray(0.5 ** (age / exp.weight_recent))
             params = {"objective": exp.objective, "learning_rate": 0.03, "num_leaves": 63, "min_data_in_leaf": 100,
                       "feature_fraction": 0.7, "bagging_fraction": 0.8, "bagging_freq": 1, "lambda_l2": 1.0,
                       "verbose": -1, "num_threads": 0, **exp.params}
-            model = lgb.train(params, lgb.Dataset(tr[feats], target, weight=w), num_boost_round=exp.rounds)
+            preds = []
+            for seed in range(exp.seeds):
+                model = lgb.train({**params, "seed": seed}, lgb.Dataset(tr[hfeats], target, weight=w),
+                                  num_boost_round=exp.rounds)
+                preds.append(model.predict(test[hfeats]))
             anchor_te = test[exp.anchor].fillna(test["ssp_l1"]) if exp.anchor else 0.0
-            pm[h] = model.predict(test[feats]) + anchor_te
+            pm[h] = np.mean(preds, axis=0) + anchor_te
         o = pd.DataFrame({f"pred{h}": pm[h] for h in HORIZONS}, index=test.index)
         out.append(o)
         print(f"  {m0:%Y-%m} done", flush=True)
