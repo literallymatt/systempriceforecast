@@ -39,6 +39,7 @@ class Exp:
     weight_recent: float = 0.0          # >0: exponential weight with this half-life in days
     seeds: int = 1                      # average this many models with different seeds
     niv_stack: bool = False             # add out-of-fold NIV regression / P(short) predictions as features
+    side_stack: bool = False            # also add out-of-fold "price if short" / "price if long" predictions
 
 
 EXPS = {
@@ -59,6 +60,10 @@ EXPS = {
     "lgbm_bag3": Exp("lgbm_bag3", seeds=3),
     "lgbm_est_anchor": Exp("lgbm_est_anchor", anchor="bm0_est_price"),
     "lgbm_stack": Exp("lgbm_stack", niv_stack=True),
+    "lgbm_2023": Exp("lgbm_2023", train_from="2023-01-15"),
+    "lgbm_2023_stack": Exp("lgbm_2023_stack", train_from="2023-01-15", niv_stack=True),
+    "lgbm_side": Exp("lgbm_side", train_from="2023-01-15", niv_stack=True, side_stack=True),
+    "lgbm_2023_stack_bag3": Exp("lgbm_2023_stack_bag3", train_from="2023-01-15", niv_stack=True, seeds=3),
 }
 
 
@@ -84,10 +89,12 @@ NIV_PARAMS = {"learning_rate": 0.06, "num_leaves": 63, "min_data_in_leaf": 100, 
               "bagging_fraction": 0.8, "bagging_freq": 1, "verbose": -1, "num_threads": 0}
 
 
-def add_niv_stack(train: pd.DataFrame, test: pd.DataFrame, feats: list[str], folds: int = 4):
+def add_niv_stack(train: pd.DataFrame, test: pd.DataFrame, feats: list[str], folds: int = 4,
+                  side: bool = False, anchor: str = "mid_l0"):
     """NIV regression and P(short) per horizon. Training rows get out-of-fold predictions from models fitted on
     the other contiguous time blocks; test rows get predictions from models fitted on all training rows."""
     train, test = train.copy(), test.copy()
+    models: dict[str, lgb.Booster] = {}
     blocks = np.array_split(np.arange(len(train)), folds)
     for h in HORIZONS:
         lab = train[f"niv_y{h}"]
@@ -103,7 +110,35 @@ def add_niv_stack(train: pd.DataFrame, test: pd.DataFrame, feats: list[str], fol
             train[name] = oof
             m = lgb.train({**NIV_PARAMS, "objective": obj}, lgb.Dataset(train[feats][ok], y[ok]), 400)
             test[name] = m.predict(test[feats])
-    return train, test
+            models[name] = m
+        if not side:
+            continue
+        a_tr = train[anchor].fillna(train["ssp_l1"])
+        a_te = test[anchor].fillna(test["ssp_l1"])
+        resid = train[f"y{h}"] - a_tr
+        for name, mask in ((f"pifshort{h}", lab > 0), (f"piflong{h}", lab <= 0)):
+            ok2 = (mask & resid.notna()).to_numpy()
+            oof = np.full(len(train), np.nan)
+            for b in blocks:
+                fit = np.ones(len(train), bool)
+                fit[b] = False
+                fit &= ok2
+                m = lgb.train({**NIV_PARAMS, "objective": "l1"}, lgb.Dataset(train[feats][fit], resid[fit]), 400)
+                oof[b] = m.predict(train[feats].iloc[b])
+            train[name] = oof + a_tr.to_numpy()
+            m = lgb.train({**NIV_PARAMS, "objective": "l1"}, lgb.Dataset(train[feats][ok2], resid[ok2]), 400)
+            test[name] = m.predict(test[feats]) + a_te.to_numpy()
+            models[name] = m
+    return train, test, models
+
+
+def stack_names(exp: "Exp") -> list[str]:
+    names = []
+    if exp.niv_stack:
+        names += [f"nivhat{h}" for h in HORIZONS] + [f"pshort{h}" for h in HORIZONS]
+    if exp.side_stack:
+        names += [f"pifshort{h}" for h in HORIZONS] + [f"piflong{h}" for h in HORIZONS]
+    return names
 
 
 def fit_predict(df: pd.DataFrame, exp: Exp, test_months: list[pd.Timestamp]) -> pd.DataFrame:
@@ -118,8 +153,8 @@ def fit_predict(df: pd.DataFrame, exp: Exp, test_months: list[pd.Timestamp]) -> 
             continue
         pm = {}
         if exp.niv_stack:
-            train, test = add_niv_stack(train, test, feats)
-        hfeats = feats + ([f"nivhat{h}" for h in HORIZONS] + [f"pshort{h}" for h in HORIZONS] if exp.niv_stack else [])
+            train, test, _ = add_niv_stack(train, test, feats, side=exp.side_stack, anchor=exp.anchor or "mid_l0")
+        hfeats = feats + stack_names(exp)
         for h in HORIZONS:
             y = f"y{h}"
             tr = train[train[y].notna()]

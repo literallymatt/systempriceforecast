@@ -71,14 +71,15 @@ def _asof(base: pd.DataFrame, versions: pd.DataFrame, target_col: str, value_col
     return out
 
 
-def build(start: str = "2024-01-01") -> pd.DataFrame:
+def build(start: str = "2023-01-01", end_extra: int = 0) -> pd.DataFrame:
+    """end_extra: extra periods after the last published price (live use: SP0 comes after it)."""
     con = store.connect()
     sp = con.sql("""select start_time, ssp, sbp, niv, price_derivation_code, accepted_offer_volume,
                            accepted_bid_volume, adj_sell_volume, adj_buy_volume
                     from system_prices order by start_time""").df()
     sp["start_time"] = pd.to_datetime(sp.start_time, utc=True).dt.as_unit("ns")
     sp = sp.drop_duplicates("start_time", keep="last").set_index("start_time")
-    grid = pd.date_range(max(sp.index.min(), pd.Timestamp(start, tz="UTC")), sp.index.max(), freq=HH)
+    grid = pd.date_range(max(sp.index.min(), pd.Timestamp(start, tz="UTC")), sp.index.max() + end_extra * HH, freq=HH)
     sp = sp.reindex(grid)
     f = pd.DataFrame(index=grid)
     f.index.name = "sp0"
@@ -209,6 +210,24 @@ def build(start: str = "2024-01-01") -> pd.DataFrame:
     f["solar_act_last"] = m.quantity
     f["solar_err_last"] = m.quantity - a["x_solar"].reindex(f.index)
     f["solar_err_ratio_last"] = f.solar_err_last / (a["x_solar"].reindex(f.index).abs() + 200)
+
+    # ---- scheduled position: aggregate PNs of all BM units (final at gate closure: SP-1..SP+2 known at tau)
+    pn_files = sorted(Path("data/features/pn_agg").glob("*.parquet"))
+    if pn_files:
+        pn = pd.concat([pd.read_parquet(p) for p in pn_files], ignore_index=True)
+        pn["start_time"] = pd.to_datetime(pn.start_time, utc=True).dt.as_unit("ns")
+        pn = pn.drop_duplicates("start_time").set_index("start_time").reindex(grid)
+        cols = ["pn_total", "pn_total_gen", "pn_total_dem", "pn_interconnector_mw_mean", "pn_gas_mw_mean",
+                "pn_wind_mw_mean", "pn_battery_mw_mean", "pn_pumped_storage_mw_mean", "pn_interconnector_mw_end",
+                "pn_gas_mw_end"]
+        cols = [c for c in cols if c in pn.columns]
+        lev = {k: pn[cols].shift(-k) for k in (-1, 0, 1, 2)}
+        for k in (0, 1, 2):
+            for c in cols:
+                f[f"{c}_h{k}"] = lev[k][c]
+                f[f"{c}_d{k}"] = lev[k][c] - lev[k - 1][c]  # scheduled change into this period
+        for k in (0, 1, 2):
+            f[f"pn_vs_tsdf_h{k}"] = f[f"pn_total_gen_h{k}"] - f[f"tsdf_h{k}"]
 
     # ---- system frequency: measurements are fetchable ~1 min after they are taken; use those >= FREQ_LAG old
     fr = _read("FREQ", ["measurementTime", "frequency"])
