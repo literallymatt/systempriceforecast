@@ -22,6 +22,12 @@ EL = Path("data/elexon")
 MAX_EVENT = pd.Timedelta(days=180)  # longer "outages" are closures and mothballing, not news
 
 
+def _np(x) -> np.ndarray:
+    """Naive UTC datetime64[ns] array from a tz-aware Series or Index."""
+    x = pd.Series(x) if isinstance(x, pd.Index) else x
+    return x.dt.tz_convert(None).dt.as_unit("ns").to_numpy()
+
+
 def _read_days(ds: str) -> pd.DataFrame:
     files = sorted((EL / ds).glob("*.parquet"))
     parts = [pd.read_parquet(f) for f in files]
@@ -39,7 +45,7 @@ def remit(sp0: pd.DatetimeIndex, tau: pd.Series, margin: int) -> pd.DataFrame:
         df[c] = pd.to_datetime(df[c], utc=True).dt.as_unit("ns")
     df = df.drop_duplicates(["mrid", "revisionNumber"]).sort_values(["mrid", "publishTime"])
     # each revision is the current word on its event from its publishTime until the next revision's
-    df["known_to"] = df.groupby("mrid").publishTime.shift(-1).fillna(pd.Timestamp.max.tz_localize("UTC").as_unit("ns"))
+    df["known_to"] = df.groupby("mrid").publishTime.shift(-1).fillna(pd.Timestamp("2200-01-01", tz="UTC").as_unit("ns"))
     df["first_pub"] = df.groupby("mrid").publishTime.transform("min")
     active = df.eventStatus.fillna("Active").eq("Active")
     short = (df.eventEndTime - df.eventStartTime) <= MAX_EVENT
@@ -47,19 +53,17 @@ def remit(sp0: pd.DatetimeIndex, tau: pd.Series, margin: int) -> pd.DataFrame:
     unpl = df.unavailabilityType.eq("Unplanned").to_numpy()
     gas = df.fuelType.fillna("").str.contains("Gas").to_numpy()
     trans = df.eventType.eq("Transmission unavailability").to_numpy()
-    pub = df.publishTime.to_numpy()
-    kto = df.known_to.to_numpy()
-    first = df.first_pub.to_numpy()
-    es, ee = df.eventStartTime.to_numpy(), df.eventEndTime.to_numpy()
+    pub, kto, first = _np(df.publishTime), _np(df.known_to), _np(df.first_pub)
+    es, ee = _np(df.eventStartTime), _np(df.eventEndTime)
     mw = df.unavailableCapacity.to_numpy(float)
 
     names = ["remit_unpl_mw_h1", "remit_pl_mw_h1", "remit_gas_unpl_mw_h1", "remit_trans_mw_h1",
              "remit_unpl_mw_h3", "remit_unpl_new1h", "remit_unpl_new3h", "remit_unpl_started3h",
              "remit_unpl_n_h1"]
     out = {n: np.full(len(sp0), np.nan) for n in names}
-    avail = (tau - pd.Timedelta(minutes=margin)).to_numpy()
-    tgt1 = (sp0 + HH + HH / 2).to_numpy()
-    tgt3 = (sp0 + 3 * HH + HH / 2).to_numpy()
+    avail = _np(tau - pd.Timedelta(minutes=margin))
+    tgt1 = _np(sp0 + HH + HH / 2)
+    tgt3 = _np(sp0 + 3 * HH + HH / 2)
     # process a day at a time against the revisions that could matter that day
     day = pd.Series(np.arange(len(sp0)), index=sp0).groupby(sp0.floor("D"))
     for d, rows in day:
@@ -90,11 +94,12 @@ def remit(sp0: pd.DatetimeIndex, tau: pd.Series, margin: int) -> pd.DataFrame:
     return pd.DataFrame(out, index=sp0)
 
 
-SYSWARN_KINDS = {
-    "margin": "MARGIN",            # electricity margin notices, capacity market notices
-    "demand_red": "DEMAND",        # high risk of demand reduction / demand control
-    "nism": "NISM",                # negative reserve active power margin
-    "sosotrade": "SO-SO",          # SO-SO trade price notifications (routine)
+SYSWARN_KINDS = {  # name -> warningType values (2023-2026 counts: SO-SO 1287, IT outage 295, other 133, ...)
+    "margin": ("ELECTRICITY MARGIN NOTICE", "CAPACITY MARKET NOTICE"),
+    "nrapm": ("NEGATIVE RESERVE ACTIVE POWER MARGIN",),
+    "dfs": ("DEMAND FLEXIBILITY SERVICE",),
+    "other": ("OTHER",),
+    "sosotrade": ("SO-SO TRADES",),
 }
 
 
@@ -104,11 +109,11 @@ def syswarn(sp0: pd.DatetimeIndex, tau: pd.Series, margin: int) -> pd.DataFrame:
         print("no SYSWARN data: skipping syswarn_ features")
         return pd.DataFrame(index=sp0)
     df["publishTime"] = pd.to_datetime(df.publishTime, utc=True).dt.as_unit("ns")
-    text = (df.warningType.fillna("") + " " + df.warningText.fillna("")).str.upper()
+    wtype = df.warningType.fillna("").str.upper().str.strip()
     out = pd.DataFrame(index=sp0)
-    avail = (tau - pd.Timedelta(minutes=margin)).to_numpy()
+    avail = _np(tau - pd.Timedelta(minutes=margin))
     for name, key in SYSWARN_KINDS.items():
-        t = np.sort(df.publishTime[text.str.contains(key, regex=False)].to_numpy())
+        t = np.sort(_np(df.publishTime[wtype.isin(key)]))
         n_now = np.searchsorted(t, avail, side="right")
         n_12h = np.searchsorted(t, avail - np.timedelta64(12, "h"), side="right")
         out[f"syswarn_{name}_12h"] = n_now - n_12h
