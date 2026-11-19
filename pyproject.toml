@@ -11,3 +11,9 @@ dependencies = [
 
 [tool.uv.sources]
 bmdash = { git = "https://github.com/literallymatt/balancingdashboard" }
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.11.2",
+    "reportlab>=5.1.0",
+]
