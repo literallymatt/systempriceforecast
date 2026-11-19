@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -43,6 +44,8 @@ FORECASTS = {
     "DGWS": {},                     # wind and solar forecasts (day-ahead and intraday), B1440
     "AGWS": {},                     # wind and solar outturn, B1630 (published ~2 h after)
     "FREQ": {},                     # system frequency, 15-second (queried by measurement time, ~1 min delay)
+    "REMIT": {},                    # outage messages, every revision with its publishTime
+    "SYSWARN": {},                  # NESO system warnings (margin notices, SO-SO trade prices, ...)
 }
 
 
@@ -93,6 +96,9 @@ async def forecast_day(api: Elexon, ds: str, d: date) -> int:
     if len(df):
         pub = pd.to_datetime(df.publishTime, utc=True)
         df = df[(pub >= start) & (pub < start + timedelta(days=1))]  # the range is inclusive at both ends
+        for c in ("outageProfile",):  # nested lists (REMIT): keep as JSON text
+            if c in df.columns:
+                df[c] = df[c].map(lambda x: json.dumps(x) if isinstance(x, list) else None)
     df["fetched_at"] = pd.Timestamp.now(tz="UTC")
     _write(df, ROOT / ds / f"{d.isoformat()}.parquet")
     return len(df)

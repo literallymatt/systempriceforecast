@@ -11,6 +11,7 @@ measured publication delay (see results/data-availability.md):
 | IMBALNGC, MELNGC, NDF, TSDF, LOLPDRM, WINDFOR | latest version with publishTime <= tau - MARGIN |
 | INDO, FUELINST outturns | publishTime <= tau - MARGIN |
 | live BM state (spf.bm_live) | acceptances issued by tau - BOALF_LAG, against final PNs; SP0..SP+2 only |
+| weather, day-ahead, MEL, REMIT, SYSWARN | see spf.extra_features |
 
     uv run python -m spf.features      # writes data/features/frame.parquet
 """
@@ -279,6 +280,10 @@ def build(start: str = "2023-01-01", end_extra: int = 0) -> pd.DataFrame:
     hol = holidays.UK(subdiv="ENG", years=range(2023, 2028))
     f["holiday"] = pd.Index(loc.date).isin(list(hol.keys())).astype(int)
     f["weekend"] = (f.dow >= 5).astype(int) | f.holiday
+
+    # ---- open-data additions: weather (GFS), day-ahead prices, MEL headroom, REMIT, system warnings
+    from spf import extra_features
+    f = f.join(extra_features.build(f, MARGIN))
     return f
 
 
