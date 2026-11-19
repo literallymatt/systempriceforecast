@@ -17,12 +17,17 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+from PIL import Image as PILImage  # noqa: E402
+from reportlab import rl_config  # noqa: E402
 from reportlab.lib import colors  # noqa: E402
 from reportlab.lib.pagesizes import A4  # noqa: E402
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet  # noqa: E402
 from reportlab.lib.units import cm  # noqa: E402
 from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer,  # noqa: E402
                                 Table, TableStyle)
+
+# Plain binary streams (no ASCII85) and flat RGB images (no alpha masks): readable by every PDF viewer.
+rl_config.useA85 = 0
 
 FIG = Path("results/figures")
 OUT = Path("results/forecast-report.pdf")
@@ -68,8 +73,9 @@ def mae(d: pd.DataFrame, c: str) -> float:
 def save(fig, name: str) -> Path:
     FIG.mkdir(parents=True, exist_ok=True)
     path = FIG / f"{name}.png"
-    fig.savefig(path, bbox_inches="tight", facecolor="white")
+    fig.savefig(path, bbox_inches="tight", facecolor="white", dpi=170)
     plt.close(fig)
+    PILImage.open(path).convert("RGB").save(path, optimize=True)  # drop the alpha channel
     return path
 
 
