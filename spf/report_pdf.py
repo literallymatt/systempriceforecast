@@ -29,6 +29,27 @@ from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, Simpl
 # Plain binary streams (no ASCII85) and flat RGB images (no alpha masks): readable by every PDF viewer.
 rl_config.useA85 = 0
 
+
+def _register_fonts() -> None:
+    """Embed DejaVu (shipped with matplotlib) so the PDF does not rely on the viewer's own Helvetica."""
+    from matplotlib import font_manager
+    from reportlab.lib.fonts import addMapping
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+
+    d = Path(font_manager.findfont("DejaVu Sans")).parent
+    for name, f in (("DejaVu", "DejaVuSans.ttf"), ("DejaVu-Bold", "DejaVuSans-Bold.ttf"),
+                    ("DejaVuMono", "DejaVuSansMono.ttf")):
+        pdfmetrics.registerFont(TTFont(name, str(d / f)))
+    addMapping("DejaVu", 0, 0, "DejaVu")
+    addMapping("DejaVu", 1, 0, "DejaVu-Bold")
+    addMapping("DejaVu", 0, 1, "DejaVu")
+    addMapping("DejaVu", 1, 1, "DejaVu-Bold")
+
+
+_register_fonts()
+rl_config.canvas_basefontname = "DejaVu"
+
 FIG = Path("results/figures")
 OUT = Path("results/forecast-report.pdf")
 H = (1, 2, 3)
@@ -317,11 +338,11 @@ def build(exp: str) -> None:
     figs["example"], ex_label = fig_example(D)
 
     ss = getSampleStyleSheet()
-    body = ParagraphStyle("b", parent=ss["Normal"], fontName="Helvetica", fontSize=9.5, leading=13.5,
+    body = ParagraphStyle("b", parent=ss["Normal"], fontName="DejaVu", fontSize=9.5, leading=13.5,
                           textColor=colors.HexColor(INK), spaceAfter=6)
-    h1 = ParagraphStyle("h1", parent=ss["Title"], fontName="Helvetica-Bold", fontSize=18, leading=22,
+    h1 = ParagraphStyle("h1", parent=ss["Title"], fontName="DejaVu-Bold", fontSize=18, leading=22,
                         alignment=0, spaceAfter=4, textColor=colors.HexColor(INK))
-    h2 = ParagraphStyle("h2", parent=ss["Heading2"], fontName="Helvetica-Bold", fontSize=12.5, leading=16,
+    h2 = ParagraphStyle("h2", parent=ss["Heading2"], fontName="DejaVu-Bold", fontSize=12.5, leading=16,
                         spaceBefore=10, spaceAfter=4, textColor=colors.HexColor(INK))
     sub = ParagraphStyle("s", parent=body, textColor=colors.HexColor(INK2), fontSize=9)
     cap = ParagraphStyle("c", parent=body, textColor=colors.HexColor(INK2), fontSize=8.3, leading=11,
@@ -356,19 +377,19 @@ def build(exp: str) -> None:
         for c in ("model", "mid", "last"):
             tbl.append([f"{wl}: {NAMES[c]}"] + [f"{m[w, c, h]:.1f}" for h in H])
     table = Table(tbl, colWidths=[W * 0.52] + [W * 0.16] * 3)
-    style = [("FONT", (0, 0), (-1, -1), "Helvetica", 9), ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 9),
+    style = [("FONT", (0, 0), (-1, -1), "DejaVu", 9), ("FONT", (0, 0), (-1, 0), "DejaVu-Bold", 9),
              ("ALIGN", (1, 0), (-1, -1), "RIGHT"), ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor(INK)),
              ("LINEBELOW", (0, 0), (-1, 0), 0.6, colors.HexColor(MUTED)),
              ("LINEBELOW", (0, 3), (-1, 3), 0.4, colors.HexColor(GRID)),
              ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]
     for r in (1, 4):
-        style.append(("FONT", (0, r), (-1, r), "Helvetica-Bold", 9))
+        style.append(("FONT", (0, r), (-1, r), "DejaVu-Bold", 9))
         style.append(("TEXTCOLOR", (0, r), (-1, r), colors.HexColor(C_MODEL)))
     table.setStyle(TableStyle(style))
 
     s = []
     s += [Paragraph("GB system price forecast: accuracy and errors", h1),
-          Paragraph(f"Model <font face='Courier'>{exp}</font> · forecasts of the next three settlement periods, "
+          Paragraph(f"Model <font face='DejaVuMono'>{exp}</font> · forecasts of the next three settlement periods, "
                     f"issued 25 minutes into the current period · {len(dv) // 3:,} development and "
                     f"{len(t) // 3:,} held-out forecasts per horizon", sub), Spacer(1, 8)]
     s += [Paragraph("Key results", h2),
@@ -431,7 +452,7 @@ def build(exp: str) -> None:
                             bottomMargin=1.6 * cm, title="GB system price forecast: accuracy and errors")
 
     def footer(canvas, d):
-        canvas.setFont("Helvetica", 7.5)
+        canvas.setFont("DejaVu", 7.5)
         canvas.setFillColor(colors.HexColor(MUTED))
         canvas.drawRightString(A4[0] - 1.8 * cm, 1 * cm, f"Page {d.page}")
 
