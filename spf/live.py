@@ -1,6 +1,6 @@
 """Live forecasting: train on all history, then forecast SP+1..SP+3 from the current period.
 
-    uv run python -m spf.live train [--exp lgbm_stack]   # fit and save models to data/models/
+    uv run python -m spf.live train [--exp lgbm_2023_stack_bag3]   # fit and save models to data/models/
     uv run python -m spf.live predict                    # refresh today's data and forecast
 
 Run `predict` at least ISSUE_MIN (25) minutes into a settlement period: that is the issue time the models
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     t = sub.add_parser("train")
-    t.add_argument("--exp", default="lgbm_stack")
+    t.add_argument("--exp", default="lgbm_2023_stack_bag3")
     sub.add_parser("predict")
     a = p.parse_args()
     train(a.exp) if a.cmd == "train" else predict()

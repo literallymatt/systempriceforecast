@@ -63,6 +63,8 @@ EXPS = {
     "lgbm_2023": Exp("lgbm_2023", train_from="2023-01-15"),
     "lgbm_2023_stack": Exp("lgbm_2023_stack", train_from="2023-01-15", niv_stack=True),
     "lgbm_side": Exp("lgbm_side", train_from="2023-01-15", niv_stack=True, side_stack=True),
+    "lgbm_ff05": Exp("lgbm_ff05", train_from="2023-01-15", niv_stack=True,
+                     params={"feature_fraction": 0.5, "min_data_in_leaf": 200}),
     "lgbm_2023_stack_bag3": Exp("lgbm_2023_stack_bag3", train_from="2023-01-15", niv_stack=True, seeds=3),
 }
 
