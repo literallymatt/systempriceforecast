@@ -80,9 +80,35 @@ def main() -> None:
              "about SP+3's PN or BOD is used.")
     L.append("- Every NESO forecast is the version published at the time, never a later revision "
              "(all versions are stored).\n")
+    L += exceedances(w)
     OUT.parent.mkdir(exist_ok=True)
     OUT.write_text("\n".join(L), encoding="utf-8")
     print("\n".join(L))
+
+
+def exceedances(w: pd.DataFrame) -> list[str]:
+    """How often the watched delays broke the backtest's rules."""
+    mins = lambda td: td.dt.total_seconds() / 60  # noqa: E731
+    sp = w[(w.dataset == "system_price") & w.valid]
+    b = w[(w.dataset == "boalf") & (w.created_t > w.watch_start)]
+    price = mins(sp.first_seen - (sp.start + pd.Timedelta(minutes=30))).dropna()
+    checks = [("System price after period end", price, features.PRICE_LAG),
+              ("BOALF after acceptance time", mins(b.first_seen - b.created_t), bm_live.BOALF_LAG)]
+    for ds in ["imbalngc", "melngc", "ndf", "tsdf", "indo", "lolpdrm", "windfor"]:
+        x = w[(w.dataset == ds) & w.valid]
+        checks.append((f"{ds.upper()} after publishTime", mins(x.first_seen - x.created_t), features.MARGIN))
+    L = ["## Late items against the rules\n",
+         "| item | n | rule (min) | later than rule | worst (min) |", "|---|---:|---:|---:|---:|"]
+    for name, d, rule in checks:
+        d = d.dropna()
+        late = int((d > rule).sum())
+        L.append(f"| {name} | {len(d)} | {rule} | {late} ({late / max(len(d), 1) * 100:.1f}%) | {d.max():.1f} |")
+    L.append(f"\nA system price later than {features.PRICE_LAG} min is still known at issue time if it arrives within "
+             f"{features.ISSUE_MIN} min of its period end: {int((price > features.ISSUE_MIN).sum())} of {len(price)} "
+             "watched prices did not. Late acceptances arrived in batches (Elexon-side delays). The backtest applies "
+             "the rules above throughout, so it does not model these rare late arrivals; live, `spf.live predict` "
+             "warns when SP−1's price is not yet published.\n")
+    return L
 
 
 if __name__ == "__main__":

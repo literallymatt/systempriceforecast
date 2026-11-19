@@ -409,8 +409,8 @@ def build(exp: str) -> None:
           img(figs["head"], "Figure 1. Mean absolute error by horizon. Both windows are walk-forward: each month is "
                             "forecast by a model trained only on data before it."),
           P("<b>Limitations.</b> Spikes and changes of side remain the main sources of error. The publication delays "
-            "were measured over a few hours of one night; a system price published unusually late would leave the "
-            "latest period unknown in live use. See results/forecast.md for the full method and the list of "
+            "were measured over 22 hours; the timing rules held for nearly every item, with rare Elexon-side delays "
+            "(2 of 42 system prices arrived after 21 minutes, all still before the 25-minute issue time). See results/forecast.md for the full method and the list of "
             "approaches that did not help."),
           PageBreak()]
     s += [Paragraph("What the forecasts look like", h2),

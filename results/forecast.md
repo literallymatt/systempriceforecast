@@ -31,10 +31,10 @@ The publication delays were measured by watching Elexon live; see [data-availabi
 
 | input | measured delay | rule used |
 |---|---|---|
-| System price / NIV | 19–20.4 min after the period ends | SP−1 is the latest (known at end + 21 min) |
-| MID (APX) | about 12.3 min after the period starts; never revised | SP0's MID is used (known at start + 20 min) |
-| BOALF acceptances | ≤ 2 min | acceptances issued ≥ 3 min before issue |
-| NESO forecasts (IMBALNGC, MELNGC, TSDF, NDF, WINDFOR, LOLPDRM, INDO) | up to 5.5 min after publishTime | latest version with publishTime ≤ issue − 8 min |
+| System price / NIV | median 19.8 min after the period ends (p95 20.4, worst 24.8) | SP−1 is the latest (known at end + 21 min) |
+| MID (APX) | 12.1–12.5 min after the period starts; never revised (43 periods) | SP0's MID is used (known at start + 20 min) |
+| BOALF acceptances | median 1.1 min (p95 1.7; 0.1% later than 3, worst 11) | acceptances issued ≥ 3 min before issue |
+| NESO forecasts (IMBALNGC, MELNGC, TSDF, NDF, WINDFOR, LOLPDRM, INDO) | IMBALNGC median 4.7 min (worst 7.8); MELNGC median 2.7 (one at 12.8); others < 2 | latest version with publishTime ≤ issue − 8 min |
 | FUELINST, wind/solar outturn | < 1 min | publishTime ≤ issue − 2 min |
 | System frequency | about 40 s | ≤ issue − 2 min |
 | PN, BOD | final at gate closure (start − 1 h) | SP0..SP+2 only; nothing about SP+3 |
@@ -102,10 +102,14 @@ These were tried and did not help:
 - **Spikes.** Prices ≥ £250 are badly under-forecast: TEST SP+1 MAE is 54 there, with a bias of −50. The
   worst 5% of forecasts carry 21% of the total error.
 - **Changes of side.** Error is much higher when the system flips: TEST SP+1 is 26.6 when it flips and 16.3
-  when it doesn't. The model calls the side (above or below MID) correctly 75% / 66% / 58% of the time.
+  when it doesn't. Reading a forecast above MID as a call that the system will be
+  short (and below as long), the model gets the side right 75% / 66% / 58% of the time.
 - **SP+3** gains least: by then its PN, BOD and acceptances are not yet known.
-- **Delays** were measured over a few hours of one night. The rules leave a margin of a minute or more, but a
-  late system price at hh:21 or later would leave SP−1 unknown in live use.
+- **Delays** were measured over 22 hours (18–19 Nov 2026). The rules held for nearly everything, with rare
+  Elexon-side delays: 2 of 42 system prices came after 21 min (worst 24.8, still before the 25-minute issue
+  time), 12 of 9,416 acceptances after 3 min, and 1 of 39 MELNGC forecasts after 8 min. The backtest does not
+  model these. Live, `predict` warns if SP−1's price is not yet out. See
+  [data-availability.md](data-availability.md).
 - **Revisions.** System prices were taken as finally published. In samples they never changed after first
   publication.
 

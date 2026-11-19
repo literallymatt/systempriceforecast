@@ -97,6 +97,9 @@ def predict() -> pd.DataFrame:
     row = frame.loc[[sp0]]
     obj = [c for c in row.columns if row[c].dtype == object]
     row[obj] = row[obj].apply(pd.to_numeric, errors="coerce")
+    if row["ssp_l1"].isna().all():
+        print("Warning: the system price for SP-1 is not published yet (Elexon is running late). The models were "
+              "backtested with it known, so this forecast is less reliable; rerun in a minute or two.")
     stack_anchor = row[meta["stack_anchor"]].fillna(row["ssp_l1"]).to_numpy()
     for name in meta["stack"]:
         pred = lgb.Booster(model_file=str(MODELS / f"{name}.txt")).predict(row[meta["features"]])
