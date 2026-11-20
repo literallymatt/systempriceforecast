@@ -392,8 +392,9 @@ def build(exp: str) -> None:
           Paragraph(f"Model <font face='DejaVuMono'>{exp}</font> · forecasts of the next three settlement periods, "
                     f"issued 25 minutes into the current period · {len(dv) // 3:,} development and "
                     f"{len(t) // 3:,} held-out forecasts per horizon", sub), Spacer(1, 8)]
+    t_end = t.index.max().tz_convert("Europe/London")
     s += [Paragraph("Key results", h2),
-          P(f"On the held-out months (May – 18 Nov 2026), which were never used to make any modelling choice, the "
+          P(f"On the held-out months (May – {t_end.day} {t_end:%b %Y}), which were never used to make any modelling choice, the "
             f"model's average error is <b>{m['test', 'model', 1]:.1f}, {m['test', 'model', 2]:.1f} and "
             f"{m['test', 'model', 3]:.1f} £/MWh</b> at SP+1, SP+2 and SP+3. That is {imp[1]:.0f}%, {imp[2]:.0f}% and "
             f"{imp[3]:.0f}% lower than using the latest market index (MID) price, the best simple baseline."),
