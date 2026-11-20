@@ -79,6 +79,8 @@ for _g, _p in NEW_GROUPS.items():
     EXPS[f"base_plus_{_g}"] = Exp(f"base_plus_{_g}", train_from="2023-01-15", niv_stack=True,
                                   drop=[x for x in NEW_ALL if x not in _p])
 EXPS["open_all_bag3"] = Exp("open_all_bag3", train_from="2023-01-15", niv_stack=True, seeds=3)
+EXPS["base_plus_dayahead_bag3"] = Exp("base_plus_dayahead_bag3", train_from="2023-01-15", niv_stack=True, seeds=3,
+                                      drop=[x for x in NEW_ALL if x != "da_"])
 
 
 def load_frame() -> pd.DataFrame:
