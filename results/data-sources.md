@@ -21,6 +21,7 @@ PN and BOD (final at gate closure), IMBALNGC, MELNGC, TSDF, NDF, WINDFOR, LOLPDR
 | **Elexon REMIT** (every revision) | Unplanned and planned unavailable MW active at SP+1 / SP+3, gas outages, transmission outages, MW newly announced in the last 1 h / 3 h | Latest revision with publishTime ≤ tau − 8 min | `spf.ingest` (REMIT), `spf.extra_features` |
 | **Continental day-ahead prices** (Energy-Charts, `api.energy-charts.info`, CC BY 4.0) | SDAC auction prices for FR, NL, BE, DE-LU, NO2, DK1 at SP+1 / SP+3, their mean, range, step into the next period, and spread to the GB day-ahead price | Auction day D (CET) known from D-1 14:00 CET. No publication time is given; each fetch records `fetched_at` | `spf.eu_dayahead` |
 | **Elexon SYSWARN** | NESO system warnings: margin notices, demand-reduction risk, NRAPM, SO-SO trade prices: count in the last 12 h, hours since the last one | publishTime ≤ tau − 8 min | `spf.ingest` (SYSWARN), `spf.extra_features` |
+| **ENTSO-E Transparency Platform** (added 20 Nov) | Day-ahead load (A65) and wind/solar (A69) forecasts for FR, NL, BE, DE-LU, NO2, DK1 and the Republic of Ireland, as residual load (load − wind − solar) at SP+1 and its step from SP0, continental totals at SP+1/SP+3, continental wind; Irish SEM day-ahead price (A44) at SP+1/SP+3 and its spread to the GB day-ahead price | The API serves only the latest revision, with no publication time: each fetch records `fetched_at`, and fixed rules apply: load and SEM price for CET day D known from D-1 14:00 CET, wind/solar from D-1 18:00 CET (the regulation's deadline). Token from `ENTSOE_API_TOKEN` or the gitignored `data/secrets/entsoe_token` | `spf.entsoe` |
 
 Why GFS rather than Open-Meteo: Open-Meteo's historical-forecast API stitches the latest runs together and
 does not say when each value became available, so a backtest on it would leak the future at a 1–2 h horizon.
@@ -39,7 +40,6 @@ same files serve live use.
 | baseline + N2EX day-ahead | 13.87 | 17.71 | 20.08 |
 | baseline + REMIT | 13.93 | 17.76 | 20.27 |
 | baseline + SYSWARN | 13.91 | 17.73 | 20.21 |
-| baseline + N2EX + continental day-ahead (`base_plus_da_eu`) | pending | | |
 
 Seed-to-seed noise is about 0.05. None of the five sources clearly helps: weather, MEL, REMIT and system
 warnings are within noise or slightly worse, and the GB day-ahead price is level at SP+1/SP+2 and 0.12
@@ -51,14 +51,43 @@ data helps only if it is genuinely new information; continental prices (intercon
 remaining candidate. The live default model (`lgbm_2023_stack_bag3`) is unchanged and excludes all new
 inputs. Full scores are in `experiments.jsonl`.
 
+## Rerun on 20 Nov 2026, with ENTSO-E
+
+Every dataset was refreshed to 20 Nov and the GFS history fetched in full (1,420 days, none failed), then the
+frame was rebuilt and the experiments rerun on a Windows machine. Same DEV window, MAE in GBP/MWh:
+
+| inputs | seeds | SP+1 | SP+2 | SP+3 |
+|---|---:|---:|---:|---:|
+| baseline (`base_stack`) | 1 | 13.90 | 17.75 | 20.19 |
+| + N2EX day-ahead (`base_plus_dayahead`) | 1 | 13.89 | 17.72 | 20.05 |
+| + N2EX + continental day-ahead (`base_plus_da_eu`) | 1 | 13.87 | 17.63 | 20.06 |
+| + ENTSO-E (`base_plus_entsoe`) | 1 | 13.90 | 17.68 | 20.03 |
+| + N2EX + continental + ENTSO-E (`base_plus_da_eu_ent`) | 1 | 13.95 | 17.66 | 20.00 |
+| + GFS weather, full history (`base_plus_weather`) | 1 | 13.92 | 17.72 | 20.21 |
+| everything (`open_all`) | 1 | 13.99 | 17.71 | 20.03 |
+| live default (`lgbm_2023_stack_bag3`, baseline inputs) | 3 | **13.85** | 17.67 | 20.12 |
+| N2EX + continental + ENTSO-E (`base_plus_da_eu_ent_bag3`) | 3 | 13.91 | **17.59** | **19.92** |
+
+- The baseline reproduces the earlier run within seed noise (13.88 / 17.71 / 20.20 before).
+- Weather still adds nothing, now with the full GFS history behind it.
+- Day-ahead prices (GB, continental, then ENTSO-E's residual load and Irish price) help the later
+  horizons. With three seeds on both sides, the combination is 0.20 better at SP+3 and 0.08 better at
+  SP+2, and 0.06 worse at SP+1. The SP+3 gain is about four times the seed noise; the SP+1 loss is at
+  the noise level.
+- So the new inputs are worth having for SP+2 and SP+3 and not for SP+1. The live default is unchanged
+  here. The natural next step is a per-horizon input set (baseline inputs for SP+1, the day-ahead and
+  ENTSO-E groups added for SP+2 and SP+3), scored once on TEST before it replaces the live model.
+- The live default's TEST score with two more days of data: 19.80 / 24.95 / 28.47 (19.76 / 24.94 /
+  28.51 before).
+
 ## Other open sources considered, not added (yet)
 
 Ranked by how much I expect them to help, given what the model already has.
 
 | source | what it would add | access | why not now |
 |---|---|---|---|
-| **ENTSO-E Transparency Platform** | Load/wind forecasts and scheduled cross-border flows (day-ahead prices now come from Energy-Charts) for France, Netherlands, Belgium, Norway, Denmark and Ireland. Interconnector flows follow the GB–continent price spread, and interconnector changes at hour boundaries are a big source of imbalance | Free API token (register, then email to ask for API access) | Needs a token; the host must be allowed. The best next addition |
-| **SEMO / SEMOpx (Ireland)** | Irish balancing and day-ahead prices, which drive the Moyle, EWIC and Greenlink flows | Public reports (reports.sem-o.com) | Host blocked here; small interconnectors |
+| **ENTSO-E scheduled cross-border flows and intraday forecasts** | Day-ahead load, wind/solar and SEM prices are now in (`spf.entsoe`). Still left: scheduled commercial exchanges between neighbours, and intraday wind/solar updates | Same token | GB borders left ENTSO-E after 2021; intraday forecasts are revised without a published history of versions |
+| **SEMO / SEMOpx (Ireland)** | Irish balancing prices (the SEM day-ahead price now comes from ENTSO-E) | Public reports (reports.sem-o.com) | Small interconnectors; balancing prices are published after the fact |
 | **NESO "upcoming trades"** | NESO's own forward trades (interconnector and other energy trades) before delivery: a direct signal of the position NESO expects | NESO data portal, refreshed every 10 min | Current snapshot only, no history of versions. Worth collecting live from now on |
 | **Sheffield Solar PV_Live** | Near-real-time national and regional solar outturn estimates. Embedded solar error is a large part of the demand error | Free API (api.pvlive.uk), reachable | Only the latest revision is kept (`updated_gmt` is the final revision's time), so the first estimates are not available historically. Elexon AGWS solar is already used. Could be logged live |
 | **NESO embedded wind and solar forecasts** | NESO's own embedded forecast, used in its demand forecast | NESO data portal | Only the latest forecast is published; history of versions is not kept. DGWS covers similar ground |

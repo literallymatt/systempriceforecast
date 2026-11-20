@@ -11,11 +11,11 @@ All inputs are free public data from Elexon Insights (BMRS), which includes NESO
 | DEV (2025-04 – 2026-04, walk-forward) | **model** | **13.85** | **17.67** | **20.12** |
 | | latest MID | 20.50 | 22.11 | 23.72 |
 | | last known price | 21.17 | 25.08 | 28.02 |
-| TEST (2026-05 – 2026-11-18, held out, scored once) | **model** | **19.76** | **24.94** | **28.51** |
-| | latest MID | 27.61 | 29.81 | 32.20 |
-| | last known price | 29.28 | 34.33 | 38.47 |
+| TEST (2026-05 – 2026-11-20, held out; same model rescored on 20 Nov with two more days) | **model** | **19.80** | **24.95** | **28.47** |
+| | latest MID | 27.63 | 29.81 | 32.19 |
+| | last known price | 29.33 | 34.35 | 38.50 |
 
-On TEST the model's error is 28% / 16% / 11% below the latest-MID baseline at SP+1 / SP+2 / SP+3, and 33% /
+On TEST the model's error is 28% / 16% / 12% below the latest-MID baseline at SP+1 / SP+2 / SP+3, and 32% /
 27% / 26% below the last known price.
 
 The TEST months are harder for every method. Prices are higher and more volatile into autumn (October MAE at
