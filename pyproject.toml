@@ -5,7 +5,8 @@ requires-python = ">=3.12"
 dependencies = [
     "bmdash",
     "eccodes>=2.50.1",
-    "eccodeslib>=2.50.0.34",
+    "eccodeslib>=2.50.0.34 ; sys_platform != 'win32'",
+    "ecmwflibs>=0.7.1 ; sys_platform == 'win32'",
     "holidays>=0.109",
     "lightgbm>=4.7.0",
     "pandas>=3.1.1",
