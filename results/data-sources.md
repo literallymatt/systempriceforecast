@@ -69,20 +69,19 @@ frame was rebuilt and the experiments rerun on a Windows machine. Same DEV windo
 | + N2EX + continental + ENTSO-E (`base_plus_da_eu_ent`) | 1 | 13.95 | 17.66 | 20.00 |
 | + GFS weather, full history (`base_plus_weather`) | 1 | 13.92 | 17.72 | 20.21 |
 | everything (`open_all`) | 1 | 13.99 | 17.71 | 20.03 |
-| live default (`lgbm_2023_stack_bag3`, baseline inputs) | 3 | **13.85** | 17.67 | 20.12 |
-| N2EX + continental + ENTSO-E (`base_plus_da_eu_ent_bag3`) | 3 | 13.91 | **17.59** | **19.92** |
+| previous model (`lgbm_2023_stack_bag3`, baseline inputs) | 3 | 13.85 | 17.67 | 20.12 |
+| live model (`base_plus_da_eu_bag3`, + N2EX + continental day-ahead), rescored on this data | 3 | **13.82** | **17.56** | 19.97 |
+| live model + ENTSO-E (`base_plus_da_eu_ent_bag3`) | 3 | 13.91 | 17.59 | **19.92** |
 
 - The baseline reproduces the earlier run within seed noise (13.88 / 17.71 / 20.20 before).
 - Weather still adds nothing, now with the full GFS history behind it.
-- Day-ahead prices (GB, continental, then ENTSO-E's residual load and Irish price) help the later
-  horizons. With three seeds on both sides, the combination is 0.20 better at SP+3 and 0.08 better at
-  SP+2, and 0.06 worse at SP+1. The SP+3 gain is about four times the seed noise; the SP+1 loss is at
-  the noise level.
-- So the new inputs are worth having for SP+2 and SP+3 and not for SP+1. The live default is unchanged
-  here. The natural next step is a per-horizon input set (baseline inputs for SP+1, the day-ahead and
-  ENTSO-E groups added for SP+2 and SP+3), scored once on TEST before it replaces the live model.
-- The live default's TEST score with two more days of data: 19.80 / 24.95 / 28.47 (19.76 / 24.94 /
-  28.51 before).
+- ENTSO-E on its own helps the baseline at SP+2 / SP+3 (17.68 / 20.03 against 17.75 / 20.19), but it
+  carries much the same information as the day-ahead prices: on top of the live model's inputs it is
+  0.06 worse at SP+1, 0.03 worse at SP+2 and 0.05 better at SP+3, all within seed noise. It is not added
+  to the live model. The ingest stays in place (`spf.entsoe`, fetched live), so the `ent_` features can be
+  revisited, for example in an SP+3-only input set.
+- The previous model's TEST score with two more days of data: 19.80 / 24.95 / 28.47 (19.76 / 24.94 /
+  28.51 to 18 Nov).
 
 ## Other open sources considered, not added (yet)
 

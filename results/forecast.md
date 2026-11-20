@@ -19,16 +19,22 @@ interconnected neighbours (Energy-Charts). Other open sources were tested and di
 | | previous model, scored to 2026-11-18 | 19.76 | 24.94 | 28.51 |
 | | latest MID | 27.65 | 29.83 | 32.22 |
 | | last known price | 29.34 | 34.38 | 38.53 |
+| TEST rescored on data refreshed to 2026-11-20 | **model** | **19.82** | **24.81** | **28.33** |
+| | previous model, same data | 19.80 | 24.95 | 28.46 |
+| | latest MID | 27.63 | 29.81 | 32.19 |
+| | last known price | 29.33 | 34.35 | 38.50 |
 
 On TEST the model's error is 29% / 17% / 12% below the latest-MID baseline at SP+1 / SP+2 / SP+3, and 33% /
 28% / 26% below the last known price. On the previous model's exact TEST window (to 2026-11-18) the new model
 scores 19.72 / 24.72 / 28.28, so the day-ahead prices are worth about 0.2 £/MWh at SP+2 and SP+3 and nothing
-at SP+1, the same pattern as on DEV.
+at SP+1, the same pattern as on DEV. A rescore on 20 Nov 2026 after a full data refresh (DEV 13.82 / 17.56 /
+19.97) gives the same picture: 28% / 17% / 12% below latest MID on TEST.
 
 The TEST months are harder for every method. Prices are higher and more volatile into autumn (October MAE at
 SP+1 is 26.6, against 12.7 in May), so the baselines are worse too. TEST was not used for any modelling
-choice. Full breakdowns (for the previous model) are in [analysis-lgbm_2023_stack_bag3_test.md](analysis-lgbm_2023_stack_bag3_test.md)
-and [analysis-lgbm_2023_stack_dev.md](analysis-lgbm_2023_stack_dev.md).
+choice. Full TEST breakdowns are in [analysis-base_plus_da_eu_bag3_test.md](analysis-base_plus_da_eu_bag3_test.md)
+(previous model: [analysis-lgbm_2023_stack_bag3_test.md](analysis-lgbm_2023_stack_bag3_test.md)), and the
+PDF write-up is [forecast-report.pdf](forecast-report.pdf).
 
 ## Forecast set-up and what is known when
 
