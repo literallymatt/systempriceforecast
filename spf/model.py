@@ -85,6 +85,8 @@ EXPS["base_plus_dayahead_bag3"] = Exp("base_plus_dayahead_bag3", train_from="202
                                       drop=[x for x in NEW_ALL if x != "da_"])
 EXPS["base_plus_da_eu"] = Exp("base_plus_da_eu", train_from="2023-01-15", niv_stack=True,
                               drop=[x for x in NEW_ALL if x not in ("da_", "eu_")])
+EXPS["base_plus_da_eu_bag3"] = Exp("base_plus_da_eu_bag3", train_from="2023-01-15", niv_stack=True, seeds=3,
+                                   drop=[x for x in NEW_ALL if x not in ("da_", "eu_")])
 
 
 def load_frame() -> pd.DataFrame:
