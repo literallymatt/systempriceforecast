@@ -78,6 +78,8 @@ for _g, _p in NEW_GROUPS.items():
     EXPS[f"open_no_{_g}"] = Exp(f"open_no_{_g}", train_from="2023-01-15", niv_stack=True, drop=_p)
     EXPS[f"base_plus_{_g}"] = Exp(f"base_plus_{_g}", train_from="2023-01-15", niv_stack=True,
                                   drop=[x for x in NEW_ALL if x not in _p])
+# the live default predates these inputs and was scored without them: keep it that way
+EXPS["lgbm_2023_stack_bag3"].drop = list(NEW_ALL)
 EXPS["open_all_bag3"] = Exp("open_all_bag3", train_from="2023-01-15", niv_stack=True, seeds=3)
 EXPS["base_plus_dayahead_bag3"] = Exp("base_plus_dayahead_bag3", train_from="2023-01-15", niv_stack=True, seeds=3,
                                       drop=[x for x in NEW_ALL if x != "da_"])

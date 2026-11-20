@@ -28,7 +28,28 @@ Its "previous runs" API is honest only at day-ahead lead times. (Its free quota 
 exhausted from this cloud container.) The GFS archive keeps every run with its publication time, and the
 same files serve live use.
 
-Results of adding these are in [forecast.md](forecast.md) and `experiments.jsonl`.
+## Results (DEV walk-forward, Apr 2025 to Apr 2026, MAE in GBP/MWh, single seed)
+
+| inputs | SP+1 | SP+2 | SP+3 |
+|---|---|---|---|
+| baseline (`base_stack`, the previous model's inputs) | 13.88 | 17.71 | 20.20 |
+| baseline + all five sources above (`open_all`) | 13.98 | 17.78 | 20.13 |
+| baseline + GFS weather | 13.96 | 17.72 | 20.19 |
+| baseline + MEL / headroom | 13.98 | 17.76 | 20.23 |
+| baseline + N2EX day-ahead | 13.87 | 17.71 | 20.08 |
+| baseline + REMIT | 13.93 | 17.76 | 20.27 |
+| baseline + SYSWARN | 13.91 | 17.73 | 20.21 |
+| baseline + N2EX + continental day-ahead (`base_plus_da_eu`) | pending | | |
+
+Seed-to-seed noise is about 0.05. None of the five sources clearly helps: weather, MEL, REMIT and system
+warnings are within noise or slightly worse, and the GB day-ahead price is level at SP+1/SP+2 and 0.12
+better at SP+3, which needs a multi-seed check (`base_plus_dayahead_bag3`) before it is relied on.
+
+The reading: at a 1-2 hour horizon the existing Elexon inputs (NESO's own wind and demand forecasts,
+recent prices, NIV, PN and BOD) already carry what weather, outages and declared capacity would add. More
+data helps only if it is genuinely new information; continental prices (interconnector flows) are the best
+remaining candidate. The live default model (`lgbm_2023_stack_bag3`) is unchanged and excludes all new
+inputs. Full scores are in `experiments.jsonl`.
 
 ## Other open sources considered, not added (yet)
 
