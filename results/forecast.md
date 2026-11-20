@@ -1,26 +1,33 @@
 # GB system price forecast: SP+1, SP+2, SP+3
 
-The final model is `lgbm_2023_stack_bag3`. It is three LightGBM models, one per horizon, each averaged over 3
+The final model is `base_plus_da_eu_bag3`. It is three LightGBM models, one per horizon, each averaged over 3
 seeds. Each predicts the price minus the latest known MID, and is fed NIV forecasts from a first-stage model.
-All inputs are free public data from Elexon Insights (BMRS), which includes NESO's published forecasts.
+All inputs are free public data: Elexon Insights (BMRS), which includes NESO's published forecasts, plus the
+GB day-ahead auction price (N2EX, via the NESO portal) and the continental day-ahead prices of GB's
+interconnected neighbours (Energy-Charts). Other open sources were tested and did not help; see
+[data-sources.md](data-sources.md).
 
 ## Accuracy (MAE, £/MWh)
 
 | window | forecast | SP+1 | SP+2 | SP+3 |
 |---|---|---:|---:|---:|
-| DEV (2025-04 – 2026-04, walk-forward) | **model** | **13.85** | **17.67** | **20.12** |
+| DEV (2025-04 – 2026-04, walk-forward) | **model** | **13.85** | **17.56** | **19.97** |
+| | previous model (`lgbm_2023_stack_bag3`, Elexon only) | 13.85 | 17.67 | 20.12 |
 | | latest MID | 20.50 | 22.11 | 23.72 |
 | | last known price | 21.17 | 25.08 | 28.02 |
-| TEST (2026-05 – 2026-11-18, held out, scored once) | **model** | **19.76** | **24.94** | **28.51** |
-| | latest MID | 27.61 | 29.81 | 32.20 |
-| | last known price | 29.28 | 34.33 | 38.47 |
+| TEST (2026-05 – 2026-11-19, held out, scored once) | **model** | **19.74** | **24.77** | **28.34** |
+| | previous model, scored to 2026-11-18 | 19.76 | 24.94 | 28.51 |
+| | latest MID | 27.65 | 29.83 | 32.22 |
+| | last known price | 29.34 | 34.38 | 38.53 |
 
-On TEST the model's error is 28% / 16% / 11% below the latest-MID baseline at SP+1 / SP+2 / SP+3, and 33% /
-27% / 26% below the last known price.
+On TEST the model's error is 29% / 17% / 12% below the latest-MID baseline at SP+1 / SP+2 / SP+3, and 33% /
+28% / 26% below the last known price. On the previous model's exact TEST window (to 2026-11-18) the new model
+scores 19.72 / 24.72 / 28.28, so the day-ahead prices are worth about 0.2 £/MWh at SP+2 and SP+3 and nothing
+at SP+1, the same pattern as on DEV.
 
 The TEST months are harder for every method. Prices are higher and more volatile into autumn (October MAE at
 SP+1 is 26.6, against 12.7 in May), so the baselines are worse too. TEST was not used for any modelling
-choice. Full breakdowns are in [analysis-lgbm_2023_stack_bag3_test.md](analysis-lgbm_2023_stack_bag3_test.md)
+choice. Full breakdowns (for the previous model) are in [analysis-lgbm_2023_stack_bag3_test.md](analysis-lgbm_2023_stack_bag3_test.md)
 and [analysis-lgbm_2023_stack_dev.md](analysis-lgbm_2023_stack_dev.md).
 
 ## Forecast set-up and what is known when
@@ -38,6 +45,8 @@ The publication delays were measured by watching Elexon live; see [data-availabi
 | FUELINST, wind/solar outturn | < 1 min | publishTime ≤ issue − 2 min |
 | System frequency | about 40 s | ≤ issue − 2 min |
 | PN, BOD | final at gate closure (start − 1 h) | SP0..SP+2 only; nothing about SP+3 |
+| N2EX GB day-ahead price | auction clears late morning the day before; no publication time given | day D known from D−1 12:00 UTC |
+| Continental day-ahead prices (FR, NL, BE, DE-LU, NO2, DK1) | SDAC results about 12:45–13:00 CET the day before; no publication time given | day D (CET) known from D−1 14:00 CET |
 
 DISBSAD (about 2.5 h late) is not used. Every version of each NESO forecast is stored, and features use an as-of
 join, so the model only ever sees the forecast that was live at the time. A check that rebuilds features with
@@ -116,10 +125,11 @@ These were tried and did not help:
 ## Running it
 
 ```bash
-uv run python -m spf.live train --exp lgbm_2023_stack_bag3   # about 4 min, fits on all history
+uv run python -m spf.live train --exp base_plus_da_eu_bag3   # about 4 min, fits on all history
 uv run python -m spf.live predict                            # refreshes the last 2 days, then forecasts
 ```
 
 Run `predict` at least 25 minutes into a period. Before that, it forecasts from the previous period and says
 so. Forecasts are logged to `data/live_forecasts.csv`. To rebuild everything from scratch, see the module
-docstrings: `spf.ingest`, `spf.mid`, `spf.pn_agg`, `spf.bm_live`, `spf.features`, then `spf.model --exp ...`.
+docstrings: `spf.ingest`, `spf.mid`, `spf.pn_agg`, `spf.bm_live`, `spf.dayahead`, `spf.eu_dayahead`,
+`spf.features`, then `spf.model --exp ...`.
