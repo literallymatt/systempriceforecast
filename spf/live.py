@@ -83,6 +83,11 @@ def predict() -> pd.DataFrame:
         if p.exists():
             p.unlink()
     asyncio.run(refresh(days))
+    try:  # N2EX day-ahead prices (NESO portal, updated daily around 11:30 UTC for the next day)
+        from spf import dayahead
+        dayahead.fetch()
+    except Exception as ex:  # noqa: BLE001
+        print(f"day-ahead fetch failed ({ex!r}); using the copy on disk")
     asyncio.run(pn_agg.run(days[0], days[-1], force=True))
     for d in days:
         df = bm_live.day_features(d)
