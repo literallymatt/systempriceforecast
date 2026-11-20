@@ -7,6 +7,7 @@
 | mel_, hr_ | MEL in force by technology (spf.mel_agg), minus PN | MEL at tau - 5 min; PN final at gate closure |
 | remit_ | REMIT outage messages, every revision (spf.ingest REMIT) | latest revision with publishTime <= tau - MARGIN |
 | syswarn_ | NESO system warnings (spf.ingest SYSWARN) | publishTime <= tau - MARGIN |
+| eu_ | Continental day-ahead prices, FR NL BE DE-LU NO2 DK1 (spf.eu_dayahead) | auction day D known from D-1 14:00 CET |
 
 Each block is skipped (with a message) if its data has not been fetched, so the frame still builds.
 """
@@ -134,8 +135,8 @@ def mel(f: pd.DataFrame) -> pd.DataFrame:
     m = m.drop(columns=[c for c in m.columns if c.startswith(("mel_coal", "mel_interconnector", "mel_units"))])
     out = m.copy()
     for k in (0, 1, 2):
-        def pn(c):
-            return f[f"{c}_h{k}"] if f"{c}_h{k}" in f else np.nan
+        def pn(c, k=k):
+            return f.get(f"{c}_h{k}", np.nan)
         out[f"hr_gas_h{k}"] = m.mel_gas - pn("pn_gas_mw_mean")
         out[f"hr_battery_h{k}"] = m.mel_battery - pn("pn_battery_mw_mean")
         out[f"hr_ps_h{k}"] = m.mel_pumped_storage - pn("pn_pumped_storage_mw_mean")
@@ -158,6 +159,12 @@ def build(f: pd.DataFrame, margin: int) -> pd.DataFrame:
         parts.append(da)
     else:
         print("no day-ahead prices: skipping da_ features")
+    from spf import eu_dayahead
+    if eu_dayahead.OUT.exists():
+        gb = parts[-1] if parts and "da_h1" in parts[-1] else None
+        parts.append(eu_dayahead.features(f.index, f.tau, gb))
+    else:
+        print("no continental day-ahead prices: skipping eu_ features")
     parts.append(mel(f))
     parts.append(remit(f.index, f.tau, margin))
     parts.append(syswarn(f.index, f.tau, margin))
