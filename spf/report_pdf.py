@@ -1,6 +1,6 @@
 """Build results/forecast-report.pdf: the final model's accuracy and errors, with charts.
 
-    uv run python -m spf.report_pdf [--exp lgbm_2023_stack_bag3]
+    uv run python -m spf.report_pdf [--exp base_plus_da_eu_bag3]
 
 Reads the walk-forward predictions in data/predictions/<exp>_{dev,test}.parquet, the feature frame (for the
 actual prices and the baselines) and results/experiments.jsonl. Charts are also saved to results/figures/.
@@ -303,7 +303,8 @@ STEPS = [("Latest MID price (baseline)", None, 20.50),
          ("+ stacked NIV / P(short) forecasts", None, 14.96),
          ("+ training data from 2023", None, 14.53),
          ("+ scheduled output (PN) by technology", None, 13.89),
-         ("+ 3-seed average (final model)", "lgbm_2023_stack_bag3", None)]
+         ("+ 3-seed average", "lgbm_2023_stack_bag3", None),
+         ("+ GB and continental day-ahead prices (live model)", "base_plus_da_eu_bag3", None)]
 
 
 def fig_steps() -> Path:
@@ -336,6 +337,13 @@ def build(exp: str) -> None:
             "bands": fig_bands(D), "hour": fig_hour(D), "flip": fig_flip(D), "conc": fig_concentration(D),
             "steps": fig_steps()}
     figs["example"], ex_label = fig_example(D)
+    import pyarrow.parquet as pq
+    from spf import model
+    cols = pq.read_schema("data/features/frame.parquet").names
+    feats = model.features(pd.DataFrame(columns=cols), model.EXPS[exp])
+    n_inputs = len(feats)
+    da_note = (", the GB day-ahead auction price (N2EX) and the continental day-ahead prices of GB's "
+               "interconnected neighbours (Energy-Charts)") if any(c.startswith("eu_") for c in feats) else ""
 
     ss = getSampleStyleSheet()
     body = ParagraphStyle("b", parent=ss["Normal"], fontName="DejaVu", fontSize=9.5, leading=13.5,
@@ -392,8 +400,9 @@ def build(exp: str) -> None:
           Paragraph(f"Model <font face='DejaVuMono'>{exp}</font> · forecasts of the next three settlement periods, "
                     f"issued 25 minutes into the current period · {len(dv) // 3:,} development and "
                     f"{len(t) // 3:,} held-out forecasts per horizon", sub), Spacer(1, 8)]
+    t_end = t.index.max().tz_convert("Europe/London")
     s += [Paragraph("Key results", h2),
-          P(f"On the held-out months (May – 18 Nov 2026), which were never used to make any modelling choice, the "
+          P(f"On the held-out months (May – {t_end.day} {t_end:%b %Y}), which were never used to make any modelling choice, the "
             f"model's average error is <b>{m['test', 'model', 1]:.1f}, {m['test', 'model', 2]:.1f} and "
             f"{m['test', 'model', 3]:.1f} £/MWh</b> at SP+1, SP+2 and SP+3. That is {imp[1]:.0f}%, {imp[2]:.0f}% and "
             f"{imp[3]:.0f}% lower than using the latest market index (MID) price, the best simple baseline."),
@@ -444,9 +453,9 @@ def build(exp: str) -> None:
           P("The model is three LightGBM gradient-boosted tree ensembles, one per horizon, each averaged over three "
             "random seeds. Each predicts how far the system price will sit from the latest MID. A first-stage model "
             "forecasts the imbalance volume and the chance the system is short, and those forecasts feed the price "
-            "model. All 240 inputs are free public data from Elexon Insights (including NESO's forecasts), each used "
-            "only once it would really have been published at the forecast time; the publication delays were "
-            "measured by watching Elexon live.")]
+            f"model. All {n_inputs} inputs are free public data: Elexon Insights (including NESO's forecasts)"
+            f"{da_note}, each used only once it would really have been published at the forecast time; the "
+            "publication delays were measured by watching Elexon live.")]
 
     doc = SimpleDocTemplate(str(OUT), pagesize=A4, leftMargin=1.8 * cm, rightMargin=1.8 * cm, topMargin=1.6 * cm,
                             bottomMargin=1.6 * cm, title="GB system price forecast: accuracy and errors")
@@ -462,5 +471,5 @@ def build(exp: str) -> None:
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("--exp", default="lgbm_2023_stack_bag3")
+    p.add_argument("--exp", default="base_plus_da_eu_bag3")
     build(p.parse_args().exp)

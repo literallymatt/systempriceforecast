@@ -8,6 +8,7 @@
 | remit_ | REMIT outage messages, every revision (spf.ingest REMIT) | latest revision with publishTime <= tau - MARGIN |
 | syswarn_ | NESO system warnings (spf.ingest SYSWARN) | publishTime <= tau - MARGIN |
 | eu_ | Continental day-ahead prices, FR NL BE DE-LU NO2 DK1 (spf.eu_dayahead) | auction day D known from D-1 14:00 CET |
+| ent_ | ENTSO-E day-ahead load and wind/solar forecasts by neighbour, SEM price (spf.entsoe) | load and SEM price from D-1 14:00 CET, wind/solar from D-1 18:00 CET |
 
 Each block is skipped (with a message) if its data has not been fetched, so the frame still builds.
 """
@@ -165,6 +166,9 @@ def build(f: pd.DataFrame, margin: int) -> pd.DataFrame:
         parts.append(eu_dayahead.features(f.index, f.tau, gb))
     else:
         print("no continental day-ahead prices: skipping eu_ features")
+    from spf import entsoe
+    gb = next((x for x in parts if "da_h1" in x), None)
+    parts.append(entsoe.features(f.index, f.tau, gb))
     parts.append(mel(f))
     parts.append(remit(f.index, f.tau, margin))
     parts.append(syswarn(f.index, f.tau, margin))

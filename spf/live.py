@@ -93,6 +93,11 @@ def predict() -> pd.DataFrame:
         eu_dayahead.fetch(today - timedelta(days=3), today + timedelta(days=1))
     except Exception as ex:  # noqa: BLE001
         print(f"continental day-ahead fetch failed ({ex!r}); using the copy on disk")
+    try:  # ENTSO-E day-ahead load, wind/solar and SEM prices, last few days only
+        from spf import entsoe
+        entsoe.fetch(today - timedelta(days=3), today + timedelta(days=2))
+    except Exception as ex:  # noqa: BLE001
+        print(f"ENTSO-E fetch failed ({type(ex).__name__}); using the copy on disk")
     asyncio.run(pn_agg.run(days[0], days[-1], force=True))
     for d in days:
         df = bm_live.day_features(d)

@@ -426,7 +426,7 @@ name = "eccodeslib"
 version = "2.50.0.34"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "eckitlib" },
+    { name = "eckitlib", marker = "sys_platform != 'win32'" },
 ]
 wheels = [
     { url = "https://files.pythonhosted.org/packages/72/0e/3355455535ffcf8d86e82803a10eb72e2da5b2ab67b721d1e9b60fb7d2a3/eccodeslib-2.50.0.34-cp312-cp312-macosx_15_0_arm64.whl", hash = "sha256:d8231224ce4113bc679796c660d9eded924d787f52c0d8ca94398bf5f8f07f97", size = 9058331, upload-time = "2026-11-06T07:27:55.104Z" },
@@ -468,6 +468,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a6/89/640f78891e9f78012f54eb7d544e64ac87fe4419346ee440b81c52d362fb/eckitlib-2.5.0.34-cp315-cp315-macosx_15_0_x86_64.whl", hash = "sha256:2298dba05b1658860e535757d7182a687e87f5098f37d3512d5844b937344fff", size = 6612581, upload-time = "2026-11-06T07:30:42.11Z" },
     { url = "https://files.pythonhosted.org/packages/6c/7c/3646ae93d512cbe0fb3f5a9f38cc792e29df10a79049ae0b9f041d67429c/eckitlib-2.5.0.34-cp315-cp315-manylinux_2_28_aarch64.whl", hash = "sha256:0faee38b999256b4a2b402a875e9a1aed2c1b1a90d929d3c65d546ac4c455dba", size = 35218202, upload-time = "2026-11-06T07:28:59.119Z" },
     { url = "https://files.pythonhosted.org/packages/be/2f/ded80d7f55ddd1474ff701aaa6aba47c23b7012f95c5c5a71f0699f3a3f1/eckitlib-2.5.0.34-cp315-cp315-manylinux_2_28_x86_64.whl", hash = "sha256:5931c45cbce0ca5fffcbe8be0729236fd1f48f8bf8ceb8c7e98af432bfaa9bf1", size = 36168595, upload-time = "2026-11-06T07:27:37.938Z" },
+]
+
+[[package]]
+name = "ecmwflibs"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "findlibs", marker = "sys_platform == 'win32'" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a1/fd/20fcb2aabed3c683f93c3a88bbfdb6c705dd750ea3eb99e66879e8736b7b/ecmwflibs-0.7.1-cp312-cp312-win_amd64.whl", hash = "sha256:88972b10a5d23d7eff1e75d789859c69b9fd51e947f2c1fae876c9d2aac6f3ad", size = 47936833, upload-time = "2026-09-23T11:38:08.237Z" },
+    { url = "https://files.pythonhosted.org/packages/19/c1/e3f0ba15801f6089fae2c3cdbe23adba043792cc297c9b89aeff1504a8e7/ecmwflibs-0.7.1-cp313-cp313-win_amd64.whl", hash = "sha256:1b392dfcdd4cf5e6da1336df5691b72e372206add6c32528171b22219c920bc6", size = 47936832, upload-time = "2026-09-23T11:38:17.07Z" },
+    { url = "https://files.pythonhosted.org/packages/2c/8c/ec693c87f75b3ed28b418be05ddf1c03e8cb1e234dc79955fde4463533db/ecmwflibs-0.7.1-cp314-cp314-win_amd64.whl", hash = "sha256:3b198ab36fcad0eed22a2df21115795828fb520d031783b0b8ee8d5d1d306897", size = 49169101, upload-time = "2026-09-23T11:38:13.202Z" },
 ]
 
 [[package]]
@@ -1374,7 +1387,8 @@ source = { virtual = "." }
 dependencies = [
     { name = "bmdash" },
     { name = "eccodes" },
-    { name = "eccodeslib" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'" },
+    { name = "ecmwflibs", marker = "sys_platform == 'win32'" },
     { name = "holidays" },
     { name = "lightgbm" },
     { name = "pandas" },
@@ -1390,7 +1404,8 @@ dev = [
 requires-dist = [
     { name = "bmdash", git = "https://github.com/literallymatt/balancingdashboard" },
     { name = "eccodes", specifier = ">=2.50.1" },
-    { name = "eccodeslib", specifier = ">=2.50.0.34" },
+    { name = "eccodeslib", marker = "sys_platform != 'win32'", specifier = ">=2.50.0.34" },
+    { name = "ecmwflibs", marker = "sys_platform == 'win32'", specifier = ">=0.7.1" },
     { name = "holidays", specifier = ">=0.109" },
     { name = "lightgbm", specifier = ">=4.7.0" },
     { name = "pandas", specifier = ">=3.1.1" },
