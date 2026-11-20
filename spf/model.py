@@ -68,6 +68,24 @@ EXPS = {
     "lgbm_2023_stack_bag3": Exp("lgbm_2023_stack_bag3", train_from="2023-01-15", niv_stack=True, seeds=3),
 }
 
+# Open-data additions (Nov 2026, spf.extra_features), by feature-name prefix
+NEW_GROUPS = {"weather": ["wx_"], "dayahead": ["da_"], "mel": ["mel_", "hr_"], "remit": ["remit_"],
+              "syswarn": ["syswarn_"], "eu": ["eu_"]}
+NEW_ALL = [p for v in NEW_GROUPS.values() for p in v]
+EXPS["base_stack"] = Exp("base_stack", train_from="2023-01-15", niv_stack=True, drop=NEW_ALL)
+EXPS["open_all"] = Exp("open_all", train_from="2023-01-15", niv_stack=True)
+for _g, _p in NEW_GROUPS.items():
+    EXPS[f"open_no_{_g}"] = Exp(f"open_no_{_g}", train_from="2023-01-15", niv_stack=True, drop=_p)
+    EXPS[f"base_plus_{_g}"] = Exp(f"base_plus_{_g}", train_from="2023-01-15", niv_stack=True,
+                                  drop=[x for x in NEW_ALL if x not in _p])
+# the live default predates these inputs and was scored without them: keep it that way
+EXPS["lgbm_2023_stack_bag3"].drop = list(NEW_ALL)
+EXPS["open_all_bag3"] = Exp("open_all_bag3", train_from="2023-01-15", niv_stack=True, seeds=3)
+EXPS["base_plus_dayahead_bag3"] = Exp("base_plus_dayahead_bag3", train_from="2023-01-15", niv_stack=True, seeds=3,
+                                      drop=[x for x in NEW_ALL if x != "da_"])
+EXPS["base_plus_da_eu"] = Exp("base_plus_da_eu", train_from="2023-01-15", niv_stack=True,
+                              drop=[x for x in NEW_ALL if x not in ("da_", "eu_")])
+
 
 def load_frame() -> pd.DataFrame:
     df = pd.read_parquet(FRAME)
